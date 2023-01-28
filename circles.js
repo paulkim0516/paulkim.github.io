@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 
 import { NURBSCurve } from 'three/addons/curves/NURBSCurve.js';
-import { ParametricGeometry } from 'three/addons/geometries/ParametricGeometry.js';
 
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
@@ -9,28 +8,36 @@ const curveNum = 3;
 const controlPtNum = 4;
 const nurbsDegree = 3;
 const tolerance = 0.001;
-const gridSizeFactor = 30;
+const gridSizeFactor = 50;
 const circleSegmentCount = 32;
 
-const colors = {
-    0: 0xff0000,
-    1: 0x00ff00,
-    2: 0x0000ff
-};
+const linewidth = 5;
+
+let colors = [
+    0xff4400,
+    0x00ffc1,
+    0x3f21ff
+];
+    
 
 let camera, scene, renderer;
 let points = new Array(curveNum), knots = new Array(curveNum);
 let curves = [];
-let curveCPLines = [];
+let curveColors = [];
+let curvesDisplayed = new THREE.Group();
+let curveCPLines = new THREE.Group();
 let circles = new THREE.Group();
 let gridSize;
 
-let width, height;
+let gui;
+
+let width, height, longerDim;
 
 function init() {
     width = window.innerWidth;
     height = window.innerHeight;
-    gridSize = width > height ? width / gridSizeFactor : height / gridSizeFactor;
+    longerDim = width > height ? width : height;
+    gridSize = longerDim / gridSizeFactor;
 
     scene = new THREE.Scene();
     camera = new THREE.OrthographicCamera( width / -2, width / 2, height / 2, height / -2, 1, 1000);
@@ -40,17 +47,34 @@ function init() {
     scene.add(camera);
 
     scene.add(circles);
+    scene.add(curvesDisplayed);
+    scene.add(curveCPLines);
+    
+    curvesDisplayed.visible = false;
+    curveCPLines.visible = false;
 
     renderer = new THREE.WebGLRenderer();
     renderer.setSize(width, height);
     document.body.appendChild(renderer.domElement);
 
-    populatePoints();
+    //randomizeColors();
+    
     drawCurves();
     drawGridCircles();
+    buildGUI();
 
-};
+    window.addEventListener( 'resize', onWindowResize );
 
+}
+
+// Generate randomized colors as preset
+function randomizeColors() {
+    for (let i = 0; i < colors.length; i++) {
+        colors[i] = Math.round(Math.random() * 0xffffff);
+    }
+}
+
+// Randomized points as control points of curves
 function populatePoints() {
     for (let i = 0; i < curveNum; i++) {
         points[i] = [];
@@ -78,8 +102,9 @@ function populatePoints() {
         points[i].push(pointOutsideRect(width / -2, height / -2, width * 2, height * 2, 0, 0, width, height));
         knots[i].push(THREE.MathUtils.clamp( (controlPtNum) / (controlPtNum - nurbsDegree), 0, 1 ));
     }
-};
+}
 
+// To make sure both ends of a curve are outside the screen
 function pointOutsideRect(xRect1, yRect1, width, height, xRect2, yRect2, rectWidth, rectHeight) {
     let x = 0, y = 0;
     
@@ -88,72 +113,74 @@ function pointOutsideRect(xRect1, yRect1, width, height, xRect2, yRect2, rectWid
         y = Math.random() * height + yRect1;
     } while (x >= xRect2 && x < xRect2 + rectWidth && y >= yRect2 && y < yRect2 + rectHeight);
     return new THREE.Vector4(x, y, 0, 1);
-};
+}
 
 function drawCurves() {
+    populatePoints();
     for (let i = 0; i < curveNum; i++) {
+        // Generate random color
+        let curveColor = Math.round(Math.random() * 0xffffff);
+        // Choose random color from preset;
+        // let curveColor = pickRandomColor(colors);
+        curveColors.push(curveColor);
+
         const nurbsCurve = new NURBSCurve(nurbsDegree, knots[i], points[i]);
         const nurbsGeometry = new THREE.BufferGeometry();
         nurbsGeometry.setFromPoints(nurbsCurve.getPoints(200));
 
-        const nurbsMaterial = new THREE.LineBasicMaterial( { color: colors[i] } );
+        const nurbsMaterial = new THREE.LineBasicMaterial( { color: curveColor } );
         const nurbsLine = new THREE.Line( nurbsGeometry, nurbsMaterial );
 
-        console.log(nurbsCurve.getPoint(1));
         curves.push(nurbsCurve);
-        scene.add(nurbsLine);
+        curvesDisplayed.add(nurbsLine);
 
         const nurbsControlPointsGeometry = new THREE.BufferGeometry();
         nurbsControlPointsGeometry.setFromPoints( nurbsCurve.controlPoints );
 
-        const nurbsControlPointsMaterial = new THREE.LineBasicMaterial( { color: colors[i], opacity: 0.25, transparent: true } );
+        const nurbsControlPointsMaterial = new THREE.LineBasicMaterial( { color: curveColor, opacity: 0.25, transparent: true } );
 
         const nurbsControlPointsLine = new THREE.Line( nurbsControlPointsGeometry, nurbsControlPointsMaterial );
-        curveCPLines.push( nurbsControlPointsLine );
-        scene.add(nurbsControlPointsLine);
+        curveCPLines.add( nurbsControlPointsLine );
     }
-};
+}
 
+// Pick random color from array of preset colors
+function pickRandomColor(givenColors) {
+    let num = Math.random();
+    for (let i = 0; i < givenColors.length; i++) {
+        if (num < 1 / givenColors.length * (i + 1)) return givenColors[i];
+    }
+    
+    return givenColors[givenColors.length - 1];
+}
+
+// Draw circles with centers on grid points
 function drawGridCircles() {
     for (let x = gridSize / 2; x <= width; x+= gridSize) {
         for (let y = gridSize / 2; y <= height; y+= gridSize) {
             const current = new THREE.Vector3(x, y, 0);
+            let distances = [];
+            let minDistance = Infinity;
+            let r = 0, g = 0, b = 0;
 
-            let r = Infinity;
-            let minPointR = new THREE.Vector3();
-            for (let param = tolerance; param <= 1; param+= tolerance) {
-                const pt = curves[0].getPointAt(param);
-                const distance = current.distanceTo(pt);
-                if (distance < r) {
-                    r = distance;
-                    minPointR = pt;
+            for (let i = 0; i < curves.length; i++) {
+                minDistance = Infinity;
+                for (let param = tolerance; param <= 1; param+= tolerance) {
+                    const pt = curves[i].getPointAt(param);
+                    const distance = current.distanceTo(pt);
+
+                    if (distance < minDistance) minDistance = distance;
                 }
+                distances.push(minDistance);
             }
 
-            let g = Infinity;
-            let minPointG = new THREE.Vector3();
-            for (let param = 0; param <= 1; param+= tolerance) {
-                const pt = curves[1].getPointAt(param);
-                const distance = current.distanceTo(pt);
-                if (distance < g) {
-                    g = distance;
-                    minPointG = pt;
-                }
+            // Circle radius to closest curve
+            for (let i = 0; i < curves.length; i++) {
+                if (minDistance > distances[i]) minDistance = distances[i];
             }
-
-            let b = Infinity;
-            let minPointB = new THREE.Vector3();
-            for (let param = 0; param <= 1; param+= tolerance) {
-                const pt = curves[2].getPointAt(param);
-                const distance = current.distanceTo(pt);
-                if (distance < b) {
-                    b = distance;
-                    minPointB = pt;
-                }
-            }
-
-            const radius = Math.min(r, g, b);
-
+            const radius = minDistance;
+            
+            // Circle geometry with circumference points
             const circlePts = [];
             for (let i = 0; i <= circleSegmentCount; i++) {
                 let theta = (i / circleSegmentCount) * Math.PI * 2;
@@ -167,24 +194,68 @@ function drawGridCircles() {
             }
             const circleGeo = new THREE.BufferGeometry().setFromPoints(circlePts);
                 
-            const circleMat = new THREE.LineBasicMaterial();
-            circleMat.color.setRGB(1 - r / width, 1 - g / width, 1 - b / width);
+            // Decide color by proximity to curves
+            // Circles closer to curves show similar colors
+            for (let i = 0; i < curves.length; i++) {
+                const tempR = (1 - distances[i] / longerDim) * curvesDisplayed.children[i].material.color.r;
+                const tempG = (1 - distances[i] / longerDim) * curvesDisplayed.children[i].material.color.g;
+                const tempB = (1 - distances[i] / longerDim) * curvesDisplayed.children[i].material.color.b;
+
+                r = r > tempR ? r : tempR;
+                g = g > tempG ? g : tempG;
+                b = b > tempB ? b : tempB;
+            }
+            
+            const matColor = Math.round(r * 0xff) * 0x010000 + Math.round(g * 0xff) * 0x000100 + Math.round(b * 0xff) * 0x000001;
+            const circleMat = new THREE.LineBasicMaterial({color: matColor, linewidth: linewidth});
             
             const circle = new THREE.LineLoop(circleGeo, circleMat);
             circle.position.x = x;
             circle.position.y = y;
 
-            console.log(circle);
             circles.add(circle);
         }
     }
-};
+}
+
+function buildGUI() {
+    gui = new GUI();
+
+    const params = {
+        curves: curvesDisplayed.visible,
+        curveCPLines: curveCPLines.visible,
+        circles: circles.visible
+    };
+
+    gui.add(params, 'curves').onChange(function (val) {
+        curvesDisplayed.visible = val;
+    });
+
+    gui.add(params, 'curveCPLines').onChange(function (val) {
+        curveCPLines.visible = val;
+    });
+
+    gui.add(params, 'circles').onChange(function (val) {
+        circles.visible = val;
+    });    
+
+    gui.open();
+}
+
+function onWindowResize() {
+
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+
+    renderer.setSize( window.innerWidth, window.innerHeight );
+
+}
 
 function animate() {
     requestAnimationFrame( animate );
 
     renderer.render( scene, camera );
-};
+}
 
 init();
 animate();
