@@ -24,7 +24,7 @@ const maxCPNum = 8;
 let controlPtNum = 4;
 const cpColor = 0xffffff;
 let tolerance = 0.001;
-let gridSizeFactor = 50;
+let gridSizeFactor = 30;
 const maxCircleSegment = 200;
 let circleSegmentCount = 32;
 
