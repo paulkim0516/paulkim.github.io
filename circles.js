@@ -24,7 +24,7 @@ const maxCPNum = 8;
 let controlPtNum = 4;
 const cpColor = 0xffffff;
 let tolerance = 0.001;
-let gridSizeFactor = 30;
+let gridSizeFactor = 10;
 const maxCircleSegment = 200;
 let circleSegmentCount = 32;
 
@@ -325,8 +325,12 @@ function onPointerMove(event) {
     removeCurveButton.enable();
     curveColorButton.enable();
 
+    let arr = [];
+    arr.push(...curvesDisplayed.children);
+    arr.push(...curveCP.children);
+
     const intersects = raycaster.intersectObjects(curvesDisplayed.children, false);
-    const intersects2 = raycaster.intersectObjects(curveCP.children, false);
+    const intersects2 = raycaster.intersectObjects(arr, false);
 
     for (const curve of curvesDisplayed.children) {
         curve.material.r = 1;
@@ -338,7 +342,7 @@ function onPointerMove(event) {
 
     if (intersects2.length > 0) {
         console.log(intersects2);
-        intersects2[0].object.material.color.setHex(0x00ffff);
+        intersects2[0].object.material.color.setHex(0xff00ff);
     }
 }
 

@@ -1,18 +1,23 @@
 import * as THREE from 'three';
 import { NURBSCurve } from 'three/addons/curves/NURBSCurve.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+import { DragControls } from 'three/addons/controls/DragControls.js';
 
 let width, height;
 
 let camera, scene, renderer;
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
+let isDragging = false;
 
-let grid = new THREE.Group();
+let selectable = [];
 let curves = new THREE.Group();
 let controlPoints = new THREE.Group();
 let cpLines = new THREE.Group();
 let circles = new THREE.Group();
+let selected = new THREE.Group();
+let dragControls;
+let hoveredColor;
 
 let nurbsDegree = 3;
 let cpCount = 4;
@@ -44,7 +49,7 @@ function init() {
     camera.position.y = 0;
     scene.add(camera);
 
-    renderer = new THREE.WebGLRenderer();
+    renderer = new THREE.WebGLRenderer({antialias: true});
     renderer.setSize(width, height);
     document.body.appendChild(renderer.domElement);
 
@@ -53,21 +58,37 @@ function init() {
 
     updateCurves();
     updateCircles();
+
+    updateDraggables();
     
     // buildGUI();
 
-    scene.add(grid);
     scene.add(curves, controlPoints, cpLines);
     scene.add(circles);
-
-    grid.visible = true;
+    scene.add(selected);
+    
     curves.visible = true;
     controlPoints.visible = true;
     cpLines.visible = true;
-    circles.visible = true;
+    circles.visible = false;
+    selected.visible = true;
     
-    window.addEventListener( 'resize', onWindowResize );
-    // document.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('resize', onWindowResize);
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+}
+
+function updateDraggables() {
+    dragControls = new DragControls(selectable, camera, renderer.domElement);
+    dragControls.addEventListener('dragstart', onDragStart);
+    dragControls.addEventListener('drag', onDrag);
+    dragControls.addEventListener('dragend', onDragEnd);
+    dragControls.addEventListener('hoveron', onHoverOn);
+    dragControls.addEventListener('hoveroff', onHoverOff);
 }
 
 /**
@@ -110,7 +131,6 @@ function pointOutsideRect(boundX, boundY, boundWidth, boundHeight, rectX, rectY,
 function curveClosestPoint(point, curve, tolerance) {
     let minDistance = Infinity;
     let t = 0;
-    console.log(curve);
 
     for (let param = 0; param <= 1; param+= tolerance) {
         let dist = point.distanceTo(curve.getPointAt(param));
@@ -181,7 +201,7 @@ function populateCP() {
         );
         ptBox.position.x = point.x;
         ptBox.position.y = point.y;
-
+        selectable.push(ptBox);
         cpGroup.add(ptBox);
     });
 
@@ -198,9 +218,7 @@ function populateCP() {
 function updateCurves() {
     for (let i = 0; i < controlPoints.children.length; i++) {
         updateCurve(i);
-        console.log("dd");
     }
-    console.log(curves);
 }
 
 /**
@@ -208,12 +226,12 @@ function updateCurves() {
  * @param {number} index 
  */
 function updateCurve(index) {
-    let curveColor = Math.random() * 0xffffff;
+    // let curveColor = Math.random() * 0xffffff;
+    let curveColor = Math.pow(0x100, index) * 0xff;
 
     const points = controlPoints.children[index].userData.points;
     const knots = controlPoints.children[index].userData.knots;
     const nurbsDegree = controlPoints.children[index].userData.nurbsDegree;
-    console.log(controlPoints.children[index]);
 
     const nurbsCurve = new NURBSCurve(nurbsDegree, knots, points);
     const nurbsGeometry = new THREE.BufferGeometry();
@@ -227,11 +245,12 @@ function updateCurve(index) {
 
     // curves[idx] = nurbsCurve;
     curves.add(nurbsLine);
+    selectable.push(nurbsLine);
 
     const nurbsControlPointsGeometry = new THREE.BufferGeometry();
     nurbsControlPointsGeometry.setFromPoints(points);
 
-    const nurbsControlPointsMaterial = new THREE.LineBasicMaterial( { color: curveColor, opacity: 0.25, transparent: true } );
+    const nurbsControlPointsMaterial = new THREE.LineBasicMaterial( { color: curveColor, opacity: 0.5, transparent: true } );
 
     const nurbsControlPointsLine = new THREE.Line( nurbsControlPointsGeometry, nurbsControlPointsMaterial );
     cpLines.add( nurbsControlPointsLine );
@@ -277,7 +296,7 @@ function updateCircles() {
                 g+= factor * curves.children[i].material.color.g;
                 b+= factor * curves.children[i].material.color.b;
             }
-
+            
             let max = Math.max(r, g, b);
             let circleColor = Math.round(r / max * 0xff) * 0x010000 + Math.round(g / max * 0xff) * 0x000100 + Math.round(b / max * 0xff) * 0x000001;
             const circleMat = new THREE.MeshBasicMaterial({color: circleColor});
@@ -294,6 +313,10 @@ function updateCircles() {
             circle.material = circleMat;
         });
     });
+}
+
+function updateEverything() {
+    //TODO
 }
 
 // function buildGUI() {
@@ -375,7 +398,6 @@ function updateCircles() {
 //     gui.open();
 // }
 
-
 function onWindowResize() {
 
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -386,14 +408,84 @@ function onWindowResize() {
 
     renderer.setSize( window.innerWidth, window.innerHeight );
 
-    //update everything
+    updateEverything();
 }
 
-function animate() {
-    requestAnimationFrame( animate );
+function onPointerDown(event) {
+    
+}
 
+function onPointerUp(event) {
+    console.log(pointer);
+    // console.log(selectable);
+}
+
+function onPointerMove(event) {
+    // pointer.x = event.clientX;
+    // pointer.y = height - event.clientY;
+    pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(pointer, camera);
+
+    const intersects = raycaster.intersectObjects(selectable, false);
+
+    if (intersects.length > 0) {
+
+    }
+}
+
+function onClick(event) {
+    
+}
+
+function onKeyDown(event) {
+
+}
+
+function onKeyUp(event) {
+
+}
+
+function onDragStart(event) {
+    if (event.object.isLine) {
+        dragControls.transformGroup = true;
+        let i = curves.children.indexOf(event.object);
+        selected.add(event.object);
+        selected.add(controlPoints.children[i]);
+    }
+    dragControls.getObjects().push(selected);
+    render();
+}
+
+function onDrag(event) {
+    
+    render();
+}
+
+function onDragEnd(event) {
+    if (dragControls.transformGroup) {
+        dragControls
+        selected.children.length = 0;
+        dragControls.transformGroup = false;
+    }
+    render();
+}
+
+function onHoverOn(event) {
+    hoveredColor = event.object.material.color;
+    event.object.material.color = new THREE.Color(0xffff00);
+    render();
+}
+
+function onHoverOff(event) {
+    event.object.material.color = hoveredColor;
+    render();
+}
+
+function render() {
     renderer.render( scene, camera );
 }
 
 init();
-animate();
+render();
