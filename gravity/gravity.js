@@ -112,6 +112,13 @@ class CollidingSphere extends THREE.Mesh {
 class BoundingSpace extends THREE.Mesh {
     constructor(geometry, material) {
         super(geometry, material);
+        this.surfaces = [];
+        const normal = geometry.attributes.normal;
+        const position = geometry.attributes.position;
+        for (let i = 0; i < normal.array.length; i += normal.itemSize) {
+            let nVec = new THREE.Vector3(normal.array[i], normal.array[i+1], normal.array[i+2]);
+            
+        }
     }
 }
 
