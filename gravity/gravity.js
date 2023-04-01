@@ -17,6 +17,7 @@ let sphereCount = 2;
 let sphereRadius = 0.2;
 let sphereMatDensity = 1;
 let velocityScaleFactor = 0.005;
+let timeScale = 0.75;
 
 const gravConstant = 10 ** -3;
 
@@ -55,7 +56,7 @@ class CollidingSphere extends THREE.Mesh {
         
         gravityPoints.forEach(gravityPoint => {
             if (gravityPoint instanceof GravityPoint) {
-                if ((this.position.distanceTo(gravityPoint.position) < this.radius / 2) && (this.velocity.length() < velocityScaleFactor / 50)) {
+                if ((this.position.distanceTo(gravityPoint.position) < this.radius / 2) && (this.velocity.length() < velocityScaleFactor / 50 / timeScale)) {
                     console.log("dd");
                     this.velocity.copy(new THREE.Vector3().randomDirection().multiplyScalar(velocityScaleFactor));
                 }
@@ -242,7 +243,8 @@ function initSpace() {
 function initSphere() {
     for (let i = 0; i < sphereCount; i++) {
         const sphereGeo = new THREE.SphereGeometry(sphereRadius, 128, 128);
-        const sphereMat = new THREE.MeshPhongMaterial({color: Math.round(Math.random() * 0xf) * 0x111111});
+        const sphereMat = new THREE.MeshPhongMaterial({color: 0xffffff});
+        // const sphereMat = new THREE.MeshPhongMaterial({color: Math.round(Math.random() * 0xf) * 0x111111});
 
         const sphere = new CollidingSphere(
             sphereGeo,
@@ -267,7 +269,7 @@ function initGravPoint() {
 
 function animate(currentTime) {
     controls.update();
-    const delta = currentTime - lastFrameTime;
+    const delta = (currentTime - lastFrameTime) * timeScale;
 
     spheres.children.forEach(sphere => {
         // sphere.updatePosition(spheres.children.concat(spaceMesh), [gravPoint], delta);
