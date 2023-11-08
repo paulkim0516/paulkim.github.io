@@ -222,7 +222,9 @@ function init() {
     scene.add(pointLight);
 
     initSpace();
+    console.log("d");
     initSphere();
+    console.log("s");
     initGravPoint();
     lastFrameTime = performance.now();
 }
@@ -272,9 +274,10 @@ function animate(currentTime) {
     const delta = (currentTime - lastFrameTime) * timeScale;
 
     spheres.children.forEach(sphere => {
-        // sphere.updatePosition(spheres.children.concat(spaceMesh), [gravPoint], delta);
+        // sphere.updatePosition(spheres.children.concat(spaceMesh), [], delta);
+        sphere.updatePosition(spheres.children.concat(spaceMesh), [gravPoint], delta);
         // sphere.updatePosition(spheres.children.concat(spaceMesh), spheres.children, delta);
-        sphere.updatePosition(spheres.children.concat(spaceMesh), spheres.children.concat(gravPoint), delta);
+        // sphere.updatePosition(spheres.children.concat(spaceMesh), spheres.children.concat(gravPoint), delta);
     });
 
 

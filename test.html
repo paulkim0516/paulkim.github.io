@@ -1,276 +1,309 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - GLTFloader</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="main.css">
+	</head>
 
-<head>
-    <meta charset="utf-8">
-    <title>Three.js Example</title>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.148.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.148.0/examples/jsm/"
-            }
-        }
-    </script>
-    <style>
-        body {
-            margin: 0;
-        }
+	<body>
+		<!-- Import maps polyfill -->
+		<!-- Remove this when import maps will be widely supported -->
 
-        canvas {
-            display: block;
-        }
-    </style>
-</head>
-
-<body>
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-
-        let camera, scene, renderer;
-        let raycaster;
-        let controls;
-        let gui;
-        const fov = 75;
-        const near = 0.1;
-        const far = 1000;
-
-        let closestPlaneDist = 0;
-
-        const boxDim = 4;
-        const sphereRadius = 0.2;
-
-        let box, sphere, center;
-        let prevTime = 0;
-        let velocity = new THREE.Vector3(0.001, 0.002, 0.003);
-        // let velocity = new THREE.Vector3(0, 0.004, 0);
-
-        function init() {
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, near, far);
-            camera.position.z = 5;
-            renderer = new THREE.WebGLRenderer();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
-            document.body.appendChild(renderer.domElement);
-
-            controls = new OrbitControls(camera, renderer.domElement);
-            raycaster = new THREE.Raycaster();
-
-            const pointLight = new THREE.PointLight(0xffffff, 1, 10);
-            pointLight.castShadow = true;
-            scene.add(pointLight);
-
-            const ambient = new THREE.AmbientLight(0xffffff, 0.01);
-            // scene.add(ambient);
-            setupGeometry();
-            buildInfoMenu();
-        }
-
-        function buildInfoMenu() {
-            gui = new GUI();
-            const params = {
-                gravity: center.visible,
-                speed: Math.round(velocity.length),
-                x: sphere.position.x,
-                y: sphere.position.y,
-                z: sphere.position.z,
-                s0: 'null'
-            };
-
-            gui.add(params, 'gravity').onChange(v => {
-                center.visible = v;
-                // console.log(enableGravity);
-                // animate();
-            });
-            gui.add(params, 'speed').disable();
-            gui.add(params, 'x').disable();
-            gui.add(params, 'y').disable();
-            gui.add(params, 'z').disable();
-            gui.add(params, 's0').disable();
-        }
-
-        function setupGeometry() {
-            center = new THREE.Mesh(new THREE.SphereGeometry(0.05, 32, 32), new THREE.MeshPhongMaterial({ color: 0x222222 }));
-            scene.add(center);
-            console.log(center);
-            // box = new THREE.Mesh(new THREE.BoxGeometry(boxDim, boxDim, boxDim), new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 }));
-            box = new THREE.Mesh(new THREE.OctahedronGeometry(boxDim), new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 }));
-            box.receiveShadow = true;
-            box.rotation.y = Math.PI;
-            box.material.shadowSide = THREE.DoubleSide;
-            box.material.color.set(Math.round(Math.random() * 0x79 + 0x80) * 0x010000 + Math.round(Math.random() * 0x79 + 0x80) * 0x000100 + Math.round(Math.random() * 0x79 + 0x80) * 0x000001);
-            scene.add(box);
-            let floor = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.MeshLambertMaterial({ color: 0x444444 }));
-            floor.position.y = -2.2;
-            floor.rotation.x = - Math.PI / 2;
-            floor.receiveShadow = true;
-            // scene.add(floor);
-            sphere = new THREE.Mesh(new THREE.SphereGeometry(sphereRadius, 128, 128), new THREE.MeshPhongMaterial({ color: 0xffffff }));
-            sphere.position.set(-1.5, 0, 0);
-            sphere.castShadow = true;
-            sphere.receiveShadow = true;
-            scene.add(sphere);
-        }
-
-        function checkIntersects(mesh) {
-            const intersects = [];
-            const intersectedNormals = [];
-            raycaster.set(mesh.position, new THREE.Vector3(0, 0, -1));
-            intersects.push(...raycaster.intersectObject(box));
-            raycaster.set(mesh.position, new THREE.Vector3(0, 0, 1));
-            intersects.push(...raycaster.intersectObject(box));
-            raycaster.set(mesh.position, new THREE.Vector3(0, -1, 0));
-            intersects.push(...raycaster.intersectObject(box));
-            raycaster.set(mesh.position, new THREE.Vector3(0, 1, 0));
-            intersects.push(...raycaster.intersectObject(box));
-            raycaster.set(mesh.position, new THREE.Vector3(-1, 0, 0));
-            intersects.push(...raycaster.intersectObject(box));
-            raycaster.set(mesh.position, new THREE.Vector3(1, 0, 0));
-            intersects.push(...raycaster.intersectObject(box));
-            intersects.forEach(intersect => {
-                if (mesh.position.distanceTo(intersect.point) <= mesh.geometry.parameters.radius + 0.01) intersectedNormals.push(intersect.face.normal.normalize());
-            });
-            return intersectedNormals;
-        }
-
-        function getAcceleration(mesh) {
-            const acceleration = mesh.position.clone().negate().normalize();
-            const centerMass = 10;
-
-            // acceleration.multiplyScalar(centerMass / mesh.position.lengthSq() * 0.000001);
-            acceleration.multiplyScalar(0.00001);
-
-            return mesh.position.length() > 0.05 ? acceleration : new THREE.Vector3(Math.random() * 0.001, Math.random() * 0.001, Math.random() * 0.001);
-        }
-
-        function animate(timestamp) {
-            requestAnimationFrame(animate);
-            const elapsedTime = timestamp - prevTime;
-
-            const normalized = checkIntersects(sphere);
-            if (normalized.length != 0) {
-                normalized.forEach(normal => {
-                    let dotProduct = velocity.dot(normal);
-                    velocity.sub(normal.clone().multiplyScalar(2 * dotProduct));
-                });
-            }
-
-            if (!isNaN(elapsedTime)) {
-                sphere.position.add(velocity.clone().multiplyScalar(elapsedTime));
-                if (center.visible) {
-                    const acc = getAcceleration(sphere);
-                    sphere.position.add(acc.clone().multiplyScalar(Math.pow(elapsedTime, 2) / 2));
-                    velocity.add(acc.clone().multiplyScalar(elapsedTime));
+		<script type="importmap">
+            {
+                "imports": {
+                    "three": "https://unpkg.com/three@0.148.0/build/three.module.js",
+                    "three/addons/": "https://unpkg.com/three@0.148.0/examples/jsm/"
                 }
             }
+        </script>
 
-            if (velocity.length() > 0.015) {
-                console.log(velocity);
-                velocity.normalize().multiplyScalar(0.01);
-                console.log(velocity);
-            }
+		<script type="module">
 
-            if (sphere.position.x > boxDim / 2) {
-                sphere.position.x = boxDim / 2 - sphereRadius - 0.05;
-                if (velocity.x > 0) {
-                    let normal = new THREE.Vector3(-1, 0, 0);
-                    let dotProduct = velocity.dot(normal);
-                    velocity.reflect(normal);
-                }
-            } else if (sphere.position.x < -boxDim / 2) {
-                sphere.position.x = -boxDim / 2 + sphereRadius + 0.05;
-                if (velocity.x < 0) {
-                    let normal = new THREE.Vector3(1, 0, 0);
-                    let dotProduct = velocity.dot(normal);
-                    velocity.reflect(normal);
-                }
-            }
-            if (sphere.position.y > boxDim / 2) {
-                sphere.position.y = boxDim / 2 - sphereRadius - 0.05;
-                if (velocity.y > 0) {
-                    let normal = new THREE.Vector3(0, -1, 0);
-                    let dotProduct = velocity.dot(normal);
-                    velocity.reflect(normal);
-                }
-            } else if (sphere.position.y < -boxDim / 2) {
-                sphere.position.y = -boxDim / 2 + sphereRadius + 0.05;
-                if (velocity.y < 0) {
-                    let normal = new THREE.Vector3(0, 1, 0);
-                    let dotProduct = velocity.dot(normal);
-                    velocity.reflect(normal);
-                }
-            }
-            if (sphere.position.z > boxDim / 2) {
-                sphere.position.z = boxDim / 2 - sphereRadius - 0.05;
-                if (velocity.z > 0) {
-                    let normal = new THREE.Vector3(0, 0, -1);
-                    let dotProduct = velocity.dot(normal);
-                    velocity.reflect(normal);
-                }
-            } else if (sphere.position.z < -boxDim / 2) {
-                sphere.position.z = -boxDim / 2 + sphereRadius + 0.05;
-                if (velocity.z < 0) {
-                    let normal = new THREE.Vector3(0, 0, 1);
-                    let dotProduct = velocity.dot(normal);
-                    velocity.reflect(normal);
-                }
-            }
+			// import * as THREE from 'three';
 
-            prevTime = timestamp;
-            render();
-            closestPlaneDist = closestPlane();
-        }
+			// import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+			// import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+			// import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
-        function closestPlane() {
-            let minDist = Infinity;
-            const index = box.geometry.getIndex();
-            const position = box.geometry.attributes.position.array;
-            if (index) {
-                for (let i = 0; i < index.count; i += 3) {
-                    let v1 = new THREE.Vector3(position[index.array[i]*3], position[index.array[i]*3+1], position[index.array[i]*3+2]);
-                    let v2 = new THREE.Vector3(position[index.array[i+1]*3], position[index.array[i+1]*3+1], position[index.array[i+1]*3+2]);
-                    let v3 = new THREE.Vector3(position[index.array[i+2]*3], position[index.array[i+2]*3+1], position[index.array[i+2]*3+2]);
-                    
-                    const plane = new THREE.Plane();
-                    plane.setFromCoplanarPoints(v1, v2, v3);
-                    minDist = Math.min(minDist, Math.abs(plane.distanceToPoint(sphere.position)));
-                }
-            } else {
-                for (let i = 0; i < position.length; i+=9) {
-                    let v1 = new THREE.Vector3(position[i], position[i + 1], position[i + 2]);
-                    let v2 = new THREE.Vector3(position[i + 3], position[i + 4], position[i + 5]);
-                    let v3 = new THREE.Vector3(position[i + 6], position[i + 7], position[i + 8]);
-                    
-                    const plane = new THREE.Plane();
-                    plane.setFromCoplanarPoints(v1, v2, v3);
-                    minDist = Math.min(minDist, Math.abs(plane.distanceToPoint(sphere.position)));
-                }
-            }
+			// let camera, scene, renderer;
 
-            // console.log(closestPlaneDist);
-            return minDist;
-        }
+			// init();
+			// render();
 
-        function render() {
-            controls.update();
-            gui.controllers[1].setValue(velocity.length());
-            gui.controllers[2].setValue(sphere.position.x);
-            gui.controllers[3].setValue(sphere.position.y);
-            gui.controllers[4].setValue(sphere.position.z);
-            gui.controllers[5].setValue(closestPlaneDist);
-            renderer.render(scene, camera);
-        }
+			// function init() {
 
-        init();
-        animate();
-        console.log(box);
-        const normalArr = box.geometry.attributes.position;
-        console.log(normalArr);
+			// 	const container = document.createElement( 'div' );
+			// 	document.body.appendChild( container );
 
-    </script>
-</body>
+			// 	camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.25, 20 );
+			// 	camera.position.z = 50;
 
+			// 	scene = new THREE.Scene();
+
+			// 	scene.add(new THREE.AmbientLight(0xffffff));
+
+			// 	const length = 12, width = 8;
+
+			// 	const shape = new THREE.Shape();
+			// 	shape.moveTo( 0,0 );
+			// 	shape.lineTo( 0, width );
+			// 	shape.lineTo( length, width );
+			// 	shape.lineTo( length, 0 );
+			// 	shape.lineTo( 0, 0 );
+
+			// 	const extrudeSettings = {
+			// 		steps: 2,
+			// 		depth: 16,
+			// 		bevelEnabled: true,
+			// 		bevelThickness: 1,
+			// 		bevelSize: 1,
+			// 		bevelOffset: 0,
+			// 		bevelSegments: 1
+			// 	};
+
+			// 	const geometry = new THREE.ExtrudeGeometry( shape, extrudeSettings );
+			// 	const material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
+			// 	const mesh = new THREE.Mesh( geometry, material ) ;
+			// 	scene.add( mesh );
+
+			// 	renderer = new THREE.WebGLRenderer( { antialias: true } );
+			// 	renderer.setPixelRatio( window.devicePixelRatio );
+			// 	renderer.setSize( window.innerWidth, window.innerHeight );
+			// 	renderer.toneMapping = THREE.ACESFilmicToneMapping;
+			// 	renderer.toneMappingExposure = 1;
+			// 	renderer.outputEncoding = THREE.sRGBEncoding;
+			// 	container.appendChild( renderer.domElement );
+
+			// 	window.addEventListener( 'resize', onWindowResize );
+			// }
+
+			// function onWindowResize() {
+
+			// 	camera.aspect = window.innerWidth / window.innerHeight;
+			// 	camera.updateProjectionMatrix();
+
+			// 	renderer.setSize( window.innerWidth, window.innerHeight );
+
+			// 	render();
+
+			// }
+
+			//
+
+			// function render() {
+
+			// 	renderer.render( scene, camera );
+
+			// }
+
+			// import * as THREE from 'three';
+
+			// let tolerance = 0.001;
+			// let start = 0;
+			// let end = 1;
+			// let sampleNum = 20;
+
+			// let tSampled = [];
+			// let sampled = [];
+			// let idx;
+			// console.log(tolerance < (end - start) / sampleNum);
+
+			// let point = new THREE.Vector3();
+
+			// let curveGeo = new THREE.CubicBezierCurve3(
+			// 	new THREE.Vector3(98.61,    343.47, 0),
+			// 	new THREE.Vector3(497.41,   519.31, 0),
+			// 	new THREE.Vector3(650.08,   21.31,  0),
+			// 	new THREE.Vector3(925.52,   321.77, 0)
+			// );
+
+			// while (tolerance < (end - start) / sampleNum) {
+			// 	tSampled = [];
+			// 	sampled = [];
+
+			// 	for (let param = start; param <= end; param += (end - start) / sampleNum) {
+			// 		tSampled.push(param);
+			// 		let pointOnCurve = curveGeo.getPointAt(param);
+			// 		sampled.push(point.distanceTo(pointOnCurve));
+			// 	}
+
+			// 	console.log(tSampled);
+			// 	console.log(sampled);
+
+			// 	idx = sampled.indexOf(Math.min(...sampled));
+
+			// 	if (idx === 0 || sampled[idx + 1] < sampled[idx - 1]) {
+			// 		console.log((end - start) / sampleNum);
+			// 		console.log(tSampled[idx]);
+			// 		console.log(tSampled[idx + 1]);
+			// 		start = tSampled[idx];
+			// 		end = tSampled[idx + 1];
+			// 	} else {
+			// 		console.log((end - start) / sampleNum);
+			// 		console.log(tSampled[idx - 1]);
+			// 		console.log(tSampled[idx]);
+			// 		start = tSampled[idx - 1];
+			// 		end = tSampled[idx];
+			// 	}
+			// }
+
+			// const scene = new THREE.Scene();
+			// const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+
+			// const renderer = new THREE.WebGLRenderer();
+			// renderer.setSize( window.innerWidth, window.innerHeight );
+			// document.body.appendChild( renderer.domElement );
+
+			// const geometry = new THREE.BoxGeometry( 1, 1, 1 );
+			// const material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
+			// const cube = new THREE.Mesh( geometry, material );
+			// // scene.add( cube );
+
+			
+
+			// scene.add(new THREE.AmbientLight(0xffffff));
+
+			// const length = 12, width = 8;
+
+			// const shape = new THREE.Shape();
+			// shape.moveTo( 0,0 );
+			// shape.lineTo( 0, width );
+			// shape.lineTo( length, width );
+			// shape.lineTo( length, 0 );
+			// shape.lineTo( 0, 0 );
+
+			// const extrudeSettings = {
+			// 	steps: 2,
+			// 	depth: 16,
+			// 	bevelEnabled: true,
+			// 	bevelThickness: 1,
+			// 	bevelSize: 1,
+			// 	bevelOffset: 0,
+			// 	bevelSegments: 1
+			// };
+
+			// let innerWidth = window.innerWidth;
+			// let innerHeight = window.innerHeight;
+
+			// const cpPreset = [
+			// 	[
+			// 		new THREE.Vector3(98.61,    343.47, 0),
+			// 		new THREE.Vector3(497.41,   519.31, 0),
+			// 		new THREE.Vector3(650.08,   21.31,  0),
+			// 		new THREE.Vector3(925.52,   321.77, 0)
+			// 	],
+			// 	[
+			// 		new THREE.Vector3(452.88,   20.12,  0),
+			// 		new THREE.Vector3(727.13,   386.20, 0),
+			// 		new THREE.Vector3(341.59,   506.30, 0),
+			// 		new THREE.Vector3(854.38,   611.25, 0)
+			// 	],
+			// 	[
+			// 		new THREE.Vector3(147.75,   19.29,  0),
+			// 		new THREE.Vector3(610.11,   335.64, 0),
+			// 		new THREE.Vector3(68.27,    420.08, 0),
+			// 		new THREE.Vector3(515.40,   679.47, 0)
+			// 	]
+			// ];
+
+			// let ratio = 1;
+
+			// if (innerWidth / 956 < innerHeight / 722) {
+			// 	ratio = innerWidth / 956;
+			// } else {
+			// 	ratio = innerHeight / 722;
+			// }
+			// cpPreset.forEach(curveCP => {
+			// 	curveCP.forEach(cp => {
+			// 		cp.add(new THREE.Vector3(-956/2, -722/2,0)).multiplyScalar(ratio);
+			// 	});
+			// });
+
+			// let curves = new THREE.Group();
+
+			// cpPreset.forEach(curveCP => {
+			// 	const curve = new THREE.CubicBezierCurve3(...curveCP);
+				
+			// 	const tubeGeo = new THREE.TubeGeometry(curve, 20, 20, 8, false);
+			// 	tubeGeo.scale(0.2, 0.2, 0.2);
+			// 	const tubeMat = new THREE.MeshBasicMaterial( { color: 0x550000 } );
+			// 	const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+			// 	const tubeLine = new THREE.LineSegments(tubeGeo, new THREE.LineBasicMaterial( { color: 0xff0000} ));
+			// 	curves.add(tubeLine);
+			// 	curves.add(tubeMesh);
+
+			// 	// const points = curve.getPoints(50);
+			// 	// const geo = new THREE.BufferGeometry().setFromPoints(points);
+			// 	// const mat = new THREE.LineBasicMaterial({ color: 0xff0000 });
+			// 	// curves.add(new THREE.Line( geo, mat ));
+
+			// 	// console.log(curve);
+			// });
+
+			// const geometry2 = new THREE.ExtrudeGeometry( shape, extrudeSettings );
+			// geometry2.center();
+			// const material2 = new THREE.MeshBasicMaterial( { color: 0x156289 } );
+			// const mesh = new THREE.Mesh( geometry2, material2 ) ;
+			// const lineSegments = new THREE.LineSegments(geometry2, new THREE.LineBasicMaterial( { color: 0xffffff }));
+			// scene.add( mesh );
+			// scene.add(lineSegments);
+			// scene.add(curves);
+
+			// camera.position.z = 50;
+
+			// function animate() {
+			// 	requestAnimationFrame( animate );
+
+			// 	// cube.rotation.x += 0.01;
+			// 	// cube.rotation.y += 0.01;
+
+			// 	mesh.rotation.x += 0.01;
+			// 	mesh.rotation.y += 0.01;
+
+			// 	curves.rotation.x += 0.01;
+			// 	curves.rotation.y += 0.01;
+
+			// 	lineSegments.rotation.x += 0.01;
+			// 	lineSegments.rotation.y += 0.01;
+
+			// 	renderer.render( scene, camera );
+			// }
+
+			// animate();
+
+			function CircleData(x, y, z, rD, gD, bD, r, g, b, radius) {
+				this.x = x;
+				this.y = y;
+				this.z = z;
+				this.rD = rD;
+				this.gD = gD;
+				this.bD = bD;
+				this.r = r;
+				this.g = g;
+				this.b = b;
+				this.radius = radius;
+				this.getHex = () => {
+					return this.r * 0x010000 + this.g * 0x000100 + this.b;
+				}
+
+				this.clone = () => {
+					return new CircleData(this.x, this.y, this.z, this.rD, this.gD, this.bD, this.r, this.g, this.b, this.radius);
+				}
+			}
+
+			let a = new CircleData(1,2,3,4,5,6,7,8,9,10);
+			console.log(a);
+			let b = a.clone();
+			console.log(b);
+			b.rD = 999;
+			console.log(a);
+			console.log(b);
+
+
+		</script>
+
+	</body>
 </html>
